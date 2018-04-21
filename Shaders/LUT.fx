@@ -48,7 +48,10 @@ sampler	SamplerLUT 	{ Texture = texLUT; };
 
 void PS_LUT_Apply(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 res : SV_Target0)
 {
-	float4 color = tex2D(ReShade::BackBuffer, texcoord.xy);
+	float4 color;
+	color.rgb = tex2D(ReShade::BackBuffer, texcoord.xy).rgb;
+	color.a   = length(color.rgb);
+	
 	float2 texelsize = 1.0 / fLUT_TileSizeXY;
 	texelsize.x /= fLUT_TileAmount;
 
@@ -56,10 +59,12 @@ void PS_LUT_Apply(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out flo
 	float lerpfact = frac(lutcoord.z);
 	lutcoord.x += (lutcoord.z-lerpfact)*texelsize.y;
 
-	float3 lutcolor = lerp(tex2D(SamplerLUT, lutcoord.xy).xyz, tex2D(SamplerLUT, float2(lutcoord.x+texelsize.y,lutcoord.y)).xyz,lerpfact);
-
-	color.xyz = lerp(normalize(color.xyz), normalize(lutcolor.xyz), fLUT_AmountChroma) * 
-	            lerp(length(color.xyz),    length(lutcolor.xyz),    fLUT_AmountLuma);
+	float4 lutcolor;
+	lutcolor.rgb = lerp(tex2D(SamplerLUT, lutcoord.xy).xyz, tex2D(SamplerLUT, float2(lutcoord.x+texelsize.y,lutcoord.y)).xyz,lerpfact);
+	lutcolor.a   = length(lutcolor.rgb);
+	
+	color.xyz = lerp( color.a > 0? color.rgb/color.a: 0.0, lutcolor.a > 0? lutcolor.rgb/lutcolor.a:0.0, fLUT_AmountChroma) * 
+	            lerp( color.a, lutcolor.a, fLUT_AmountLuma);
 
 	res.xyz = color.xyz;
 	res.w = 1.0;
