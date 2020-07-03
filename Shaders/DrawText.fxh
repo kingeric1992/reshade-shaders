@@ -196,6 +196,18 @@ float2 DrawText_Shift( float2 pos, int2 shift, float size, float ratio ) {
     return pos + size * shift * float2(0.5, 1.0) / ratio;
 }
 
+float pow10( int e ) {
+    const uint v[10] = {
+        1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000
+    };
+    int   l = abs(e);
+    float r = 1;
+
+    for( ; l > 9; l -= 9 ) r *= v[9];
+    r *= v[l];
+    return e < 0? 1./r: r;
+}
+
 void DrawText_Digit( float2 pos, float size, float ratio, float2 tex, int digit, float data, inout float res) {
     int digits[13] = {
         __0, __1, __2, __3, __4, __5, __6, __7, __8, __9, __Minus, __Space, __Dot
@@ -224,5 +236,69 @@ void DrawText_Digit( float2 pos, float size, float ratio, float2 tex, int digit,
     res  += tex2D(samplerText, (frac(uv) + float2( index % 14.0, trunc(index / 14.0))) /
                 float2( _DRAWTEXT_GRID_X, _DRAWTEXT_GRID_Y)).x;
 }
+
+    float print( float2 tl, float size, float2 pos, int val) {
+        const int digits[11] = {
+            __0, __1, __2, __3, __4, __5, __6, __7, __8, __9, __Minus
+        };
+
+        float2 uv = (pos - tl) / size;
+        uv.y  = saturate(uv.y *.5 );
+
+        int     t = abs(val);
+        int     r = val == 0? 0:floor(log10(t));
+        int     k = uv.x;
+
+        if ( uv.x < 0 ) return 0;
+
+        uv.x -= r + (val<0) + (r<0) * 2;
+        if (uv.x > 1) return 0;
+
+        int index = t * pow10(floor(uv.x));
+        index = digits[( k == 0 && val < 0)? 10 : (index % 10) * (val != 0)];
+
+        return tex2D(samplerText, (frac(uv) + float2( index % 14.0, trunc(index / 14.0))) /
+                    float2( _DRAWTEXT_GRID_X, _DRAWTEXT_GRID_Y)).x;
+    }
+
+
+    // print floats
+    float print( float2 tl, float size, float2 pos, float val, int p) {
+        const int digits[13] = {
+            __0, __1, __2, __3, __4, __5, __6, __7, __8, __9, __Minus, __Space, __Dot
+        };
+
+        float2 uv = (pos - tl) / size;
+        uv.y  = saturate(uv.y *.5 );
+
+        float   t = abs(val);
+        t += ( (t * pow(10.,p+1)) % 10. ) * .5 / pow(10.,p+1);
+        int     r = floor(log10(t));
+        uint     index ;
+
+        if ( uv.x < 0 ) return 0;
+
+        [flatten]
+        if (val < 0 && int(uv.x) == 0) index = 10;
+        else {
+            uv.x -= r + (val<0) + (r<0);
+            [flatten]
+            if (int(uv.x) == 1) index = 12;
+            else {
+                uv.x -= (r<0) + (r>0 && int(uv.x) > 1);
+                if (uv.x-1 > p) return 0;
+                index = uint (t * pow10(floor(uv.x))) % 10;
+                [flatten] if (uv.x > 1 && r > p) index = 0;
+            }
+        }
+
+        index = digits[index ];
+        return tex2D(samplerText, (frac(uv) + float2( index % 14.0, trunc(index / 14.0))) /
+                    float2( _DRAWTEXT_GRID_X, _DRAWTEXT_GRID_Y)).x;
+    }
+
+    float print( float2 tl, float size, float2 pos, float val) {
+        return print(tl, size, pos, val, 6);
+    }
 
 #endif
